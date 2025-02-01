@@ -7,6 +7,8 @@ use App\Models\Affiliate;
 use App\Models\Merchant;
 use App\Models\Order;
 use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Hash;
 
 class MerchantService
 {
@@ -20,7 +22,19 @@ class MerchantService
      */
     public function register(array $data): Merchant
     {
-        // TODO: Complete this method
+        $user = User::create([
+            'name'      => $data['name'],
+            'type'      => User::TYPE_MERCHANT,
+            'email'     => $data['email'],
+            'password'  => $data['api_key']
+        ]);
+
+        $merchant = $user->merchant()->create([
+            'domain'        => $data['domain'],
+            'display_name'  => $data['name'],
+        ]);
+
+        return $merchant;
     }
 
     /**
@@ -31,7 +45,13 @@ class MerchantService
      */
     public function updateMerchant(User $user, array $data)
     {
-        // TODO: Complete this method
+        $user->update([
+            'name'      => $data['name'],
+            'email'     => $data['email'],
+            'password'  => $data['api_key']
+        ]);
+
+        $user->merchant()->update(['domain' => $data['domain'], 'display_name' => $data['name']]);
     }
 
     /**
@@ -44,6 +64,9 @@ class MerchantService
     public function findMerchantByEmail(string $email): ?Merchant
     {
         // TODO: Complete this method
+        return User::where('email', $email)
+            ->where('type', User::TYPE_MERCHANT)
+            ->first()?->merchant;
     }
 
     /**
@@ -55,6 +78,29 @@ class MerchantService
      */
     public function payout(Affiliate $affiliate)
     {
-        // TODO: Complete this method
+        $unpaidOrders = $affiliate->orders()->where("payout_status", Order::STATUS_UNPAID)->get();
+        if ($unpaidOrders) {
+            foreach ($unpaidOrders as $order) {
+                PayoutOrderJob::dispatch($order);
+            }
+        }
+    }
+
+    public function orderStats(string $from, string $to): array
+    {
+        $orders = Order::whereBetween("created_at", [$from, $to]);
+        $totalOrders = $orders->count();
+
+        $unpaidCommissionsAmount = $orders->whereHas('affiliate')
+            ->where('payout_status', Order::STATUS_UNPAID)
+            ->sum('commission_owed');
+
+        $revenue = Order::whereBetween("created_at", [$from, $to])->sum('subtotal');
+
+        return [
+            'count'             => $totalOrders,
+            'commissions_owed'  => $unpaidCommissionsAmount,
+            'revenue'           => $revenue
+        ];
     }
 }

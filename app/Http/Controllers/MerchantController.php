@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
 class MerchantController extends Controller
 {
     public function __construct(
-        MerchantService $merchantService
+       protected MerchantService $merchantService
     ) {}
 
     /**
@@ -23,5 +23,13 @@ class MerchantController extends Controller
     public function orderStats(Request $request): JsonResponse
     {
         // TODO: Complete this method
+        $validatedData = $request->validate([
+            'from' => 'required|date',
+            'to' => 'required|date|after_or_equal:from',
+        ]);
+
+        $stats = $this->merchantService->orderStats($validatedData['from'], $validatedData['to']);
+
+        return response()->json($stats);
     }
 }
